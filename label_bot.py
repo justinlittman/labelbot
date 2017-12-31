@@ -96,33 +96,36 @@ def main(day, class_type_code_ranges, test=False, limit=0, delay=config.delay_se
     for class_type_code_range in class_type_code_ranges:
         colas.extend(retrieve_colas(day, day, class_type_code_range[0], class_type_code_range[1]))
 
-    random.shuffle(colas)
-    for count, (ttb_id, fanciful_name, brand_name, class_type) in enumerate(colas):
-        if limit and limit == count:
-            break
-        if count != 0 and not test:
-            sleep(delay)
-        company, image_filename, image_url, cookies = retrieve_cola_detail(ttb_id)
-        media_ids = []
-        if not test:
-            retrieve_image(image_filename, image_url, cookies)
-            with open(os.path.join('images', image_filename), 'rb') as file:
-                upload_resp = api.media_upload(image_filename, file=file)
-                media_ids.append(upload_resp.media_id_string)
-        class_type_str = ''
-        if class_type:
-            class_type_str = ', a {}'.format(class_type.lower())
-            if class_type[0] in ['a', 'e', 'i', 'o', 'u']:
-                class_type_str = ', an {}'.format(class_type.lower())
-        name = brand_name
-        if fanciful_name:
-            name = '{} / {}'.format(brand_name, fanciful_name)
-        status = '{} was approved for {}{}. Full application: ' \
-                 'https://www.ttbonline.gov/colasonline/viewColaDetails.do?action=publicFormDisplay&ttbid={}'.format(
-                    company, name, class_type_str, ttb_id)
-        print('{}: Tweeted {}'.format(day, status))
-        if not test:
-            api.update_status(status=status, media_ids=media_ids)
+    if colas:
+        random.shuffle(colas)
+        for count, (ttb_id, fanciful_name, brand_name, class_type) in enumerate(colas):
+            if limit and limit == count:
+                break
+            if count != 0 and not test:
+                sleep(delay)
+            company, image_filename, image_url, cookies = retrieve_cola_detail(ttb_id)
+            media_ids = []
+            if not test:
+                retrieve_image(image_filename, image_url, cookies)
+                with open(os.path.join('images', image_filename), 'rb') as file:
+                    upload_resp = api.media_upload(image_filename, file=file)
+                    media_ids.append(upload_resp.media_id_string)
+            class_type_str = ''
+            if class_type:
+                class_type_str = ', a {}'.format(class_type.lower())
+                if class_type[0] in ['a', 'e', 'i', 'o', 'u']:
+                    class_type_str = ', an {}'.format(class_type.lower())
+            name = brand_name
+            if fanciful_name:
+                name = '{} / {}'.format(brand_name, fanciful_name)
+            status = '{} was approved for {}{}. Full application: ' \
+                     'https://www.ttbonline.gov/colasonline/viewColaDetails.do?action=publicFormDisplay&ttbid={}'.format(
+                        company, name, class_type_str, ttb_id)
+            print('{}: Tweeted {}'.format(day, status))
+            if not test:
+                api.update_status(status=status, media_ids=media_ids)
+    else:
+        print('{}: No tweets'.format(day))
 
 
 if __name__ == '__main__':
