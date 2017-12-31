@@ -99,3 +99,10 @@ ENV/
 
 # mypy
 .mypy_cache/
+
+# PyCharm
+.idea/
+
+# Labelbot specific ignores
+images/
+config.py
