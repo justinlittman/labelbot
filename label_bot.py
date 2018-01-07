@@ -41,7 +41,7 @@ def retrieve_colas(date_from, date_to, class_type_from, class_type_to):
     colas = []
     for row in reader:
         colas.append((row['TTB ID'].strip('\''), row['Fanciful Name'], row['Brand Name'],
-                      lookup_class_type(row['Class/Type'])))
+                      lookup_class_type(row['Class/Type']), row['Origin']))
 
     return colas
 
@@ -98,7 +98,7 @@ def main(day, class_type_code_ranges, test=False, limit=0, delay=config.delay_se
 
     if colas:
         random.shuffle(colas)
-        for count, (ttb_id, fanciful_name, brand_name, class_type) in enumerate(colas):
+        for count, (ttb_id, fanciful_name, brand_name, class_type, origin) in enumerate(colas):
             if limit and limit == count:
                 break
             if count != 0 and not test:
@@ -118,9 +118,12 @@ def main(day, class_type_code_ranges, test=False, limit=0, delay=config.delay_se
             name = brand_name
             if fanciful_name:
                 name = '{} / {}'.format(brand_name, fanciful_name)
-            status = '{} was approved for {}{}. Full application: ' \
+            hashtag = ''
+            if origin in config.origin_hashtags:
+                hashtag = ' #{}'.format(config.origin_hashtags[origin])
+            status = '{} was approved for {}{}.{} More: ' \
                      'https://www.ttbonline.gov/colasonline/viewColaDetails.do?action=publicFormDisplay&ttbid={}'.format(
-                        company, name, class_type_str, ttb_id)
+                        company, name, class_type_str, hashtag, ttb_id)
             print('{}: Tweeted {}'.format(day, status))
             if not test:
                 api.update_status(status=status, media_ids=media_ids)
