@@ -133,7 +133,7 @@ def main(day, class_type_code_ranges, test=False, limit=0, delay=config.delay_se
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser("label_bot")
-    day = (datetime.date.today()+ datetime.timedelta(days=-3)).strftime('%m/%d/%Y')
+    day = (datetime.date.today()+ datetime.timedelta(days=-7)).strftime('%m/%d/%Y')
     parser.add_argument('class_type_range', nargs='+', help='Class type code ranges, e.g., 900-909.')
     parser.add_argument('--day', help='Day to retrieve labels for. Default is {}.'.format(day), default=day)
     parser.add_argument('--delay', type=int, help='Seconds between posting. Default is {}.'.format(config.delay_secs),
