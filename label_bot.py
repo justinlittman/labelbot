@@ -25,7 +25,8 @@ def retrieve_colas(date_from, date_to, class_type_from, class_type_to):
         'searchCriteria.dateCompletedFrom': date_from,
         'searchCriteria.dateCompletedTo': date_to,
         'searchCriteria.classTypeFrom': class_type_from,
-        'searchCriteria.classTypeTo': class_type_to
+        'searchCriteria.classTypeTo': class_type_to,
+        'searchCriteria.receivedCodeArray': 'ES'
     }
 
     search_resp = requests.post('https://www.ttbonline.gov/colasonline/publicSearchColasBasicProcess.do?action=search',
@@ -52,15 +53,19 @@ def retrieve_cola_detail(ttb_id):
     detail_resp.raise_for_status()
 
     doc = BeautifulSoup(detail_resp.text, 'html.parser')
-
     company = list(doc.find_all('div', class_='data')[6].strings)[0].strip(' \t\r\n')
     if ',' in company:
         company = company.split(',')[0]
-
+    is_square = False
+    for t in doc.stripped_strings:
+        m = re.match('Actual Dimensions: ([0-9\.]+) inches W X ([0-9\.]+) inches H', t)
+        if m and m.groups()[0] == m.groups()[1]:
+            is_square = True
+            break
     img = doc.find_all('img')[1]
     src = img['src']
     filename = re.search(r'filename=(.+)&', src).group(1)
-    return company, filename, 'https://www.ttbonline.gov' + src, detail_resp.cookies
+    return company, filename, 'https://www.ttbonline.gov' + src, is_square, detail_resp.cookies
 
 
 def retrieve_image(filename, url, cookies):
@@ -87,7 +92,7 @@ def lookup_class_type(class_type_code):
     return class_type_cache[class_type_code]
 
 
-def main(day, class_type_code_ranges, test=False, limit=0, delay=config.delay_secs):
+def main(day, class_type_code_ranges, test=False, limit=0, delay=config.delay_secs, omit_square=False):
     if os.path.exists(config.images_dir):
         shutil.rmtree(config.images_dir)
     os.makedirs(config.images_dir)
@@ -98,12 +103,16 @@ def main(day, class_type_code_ranges, test=False, limit=0, delay=config.delay_se
 
     if colas:
         random.shuffle(colas)
-        for count, (ttb_id, fanciful_name, brand_name, class_type, origin) in enumerate(colas):
+        count = 0
+        for ttb_id, fanciful_name, brand_name, class_type, origin in colas:
             if limit and limit == count:
                 break
             if count != 0 and not test:
                 sleep(delay)
-            company, image_filename, image_url, cookies = retrieve_cola_detail(ttb_id)
+            company, image_filename, image_url, is_square, cookies = retrieve_cola_detail(ttb_id)
+            if omit_square and is_square:
+                continue
+            count += 1
             media_ids = []
             if not test:
                 retrieve_image(image_filename, image_url, cookies)
@@ -139,6 +148,7 @@ if __name__ == '__main__':
     parser.add_argument('--delay', type=int, help='Seconds between posting. Default is {}.'.format(config.delay_secs),
                         default=config.delay_secs)
     parser.add_argument('--limit', type=int, default='0', help='Maximum number of posts.')
+    parser.add_argument('--omit-square', action='store_true', help='Omit square labels like keg tags')
     parser.add_argument('--test', action='store_true')
 
     args = parser.parse_args()
@@ -147,4 +157,4 @@ if __name__ == '__main__':
     for class_type_range in args.class_type_range:
         class_type_ranges.append(class_type_range.split('-'))
 
-    main(args.day, class_type_ranges, test=args.test, limit=args.limit, delay=args.delay)
+    main(args.day, class_type_ranges, test=args.test, limit=args.limit, delay=args.delay, omit_square=args.omit_square)
