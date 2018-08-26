@@ -23,6 +23,8 @@ class_type_cache = dict()
 
 
 def retrieve_colas(date_from, date_to, class_type_from, class_type_to, driver):
+    print(
+        'Getting labels from {} to {} in class types {}-{}'.format(date_from, date_to, class_type_from, class_type_to))
     driver.get('https://www.ttbonline.gov/colasonline/publicSearchColasBasic.do')
     driver.find_element_by_name('searchCriteria.dateCompletedFrom').send_keys(date_from)
     driver.find_element_by_name('searchCriteria.dateCompletedTo').send_keys(date_to)
@@ -32,14 +34,18 @@ def retrieve_colas(date_from, date_to, class_type_from, class_type_to, driver):
 
     driver.get('https://www.ttbonline.gov/colasonline/publicSaveSearchResultsToFile.do?'
                'path=/publicSearchColasBasicProcess')
-    sleep(4)
+    sleep(6)
 
     colas = []
-    with open(os.path.join(config.working_dir, 'SearchResultsFile.csv')) as csvfile:
-        reader = csv.DictReader(csvfile)
-        for row in reader:
-            colas.append((row['TTB ID'].strip('\''), row['Fanciful Name'], row['Brand Name'],
-                          lookup_class_type(row['Class/Type']), row['Origin']))
+    csv_filepath = os.path.join(config.working_dir, 'SearchResultsFile.csv')
+    if os.path.exists(csv_filepath):
+        with open(os.path.join(config.working_dir, 'SearchResultsFile.csv')) as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                colas.append((row['TTB ID'].strip('\''), row['Fanciful Name'], row['Brand Name'],
+                              lookup_class_type(row['Class/Type']), row['Origin']))
+    else:
+        print('No results')
     return colas
 
 
@@ -147,7 +153,7 @@ def main(day, class_type_code_ranges, test=False, limit=0, delay=config.delay_se
                 status = '{} was approved for {}{}.{} More: ' \
                          'https://www.ttbonline.gov/colasonline/viewColaDetails.do?' \
                          'action=publicFormDisplay&ttbid={}'.format(
-                             company, name, class_type_str, hashtag, ttb_id)
+                    company, name, class_type_str, hashtag, ttb_id)
                 tweets.append((status, image_filename))
     finally:
         driver.close()
