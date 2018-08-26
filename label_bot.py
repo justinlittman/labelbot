@@ -66,7 +66,6 @@ def retrieve_cola_detail(ttb_id, driver):
 
 
 def retrieve_image(filename, url, session):
-    print('Getting {}'.format(url))
     image_resp = session.get(url, stream=True)
     image_resp.raise_for_status()
     with open(os.path.join(config.working_dir, filename), 'wb') as file:
