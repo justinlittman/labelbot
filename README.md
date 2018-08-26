@@ -22,6 +22,25 @@ This bot is currently tweets as [@beerlabelbot](https://twitter.com/beerlabelbot
     
 4. Update config.py. This may require that you create a new Twitter app.
 
+5. [Install Chromedriver](https://sites.google.com/a/chromium.org/chromedriver/).
+   
+   On a Mac, this is:
+
+        brew cask install chromedriver
+        
+   If already installed, upgrade Chromedriver with:
+
+        brew cask upgrade chromedriver
+        
+   On Ubuntu, this is:
+   
+        apt-get install chromium-chromedriver
+        
+   And then add this to your .profile:
+   
+        PATH="$PATH:/usr/lib/chromium-browser/"
+
+
 ## Usage
 
     python label_bot.py 900-909 950-959

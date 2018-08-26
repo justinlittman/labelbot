@@ -104,5 +104,5 @@ ENV/
 .idea/
 
 # Labelbot specific ignores
-images/
+working_dir/
 config.py
