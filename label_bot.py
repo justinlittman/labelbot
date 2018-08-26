@@ -155,7 +155,6 @@ def main(day, class_type_code_ranges, test=False, limit=0, delay=config.delay_se
 
     if tweets:
         for status, image_filename in tweets:
-            print('{}: Tweeted {}'.format(day, status))
             if not test:
                 sleep(delay)
                 media_ids = []
@@ -163,6 +162,9 @@ def main(day, class_type_code_ranges, test=False, limit=0, delay=config.delay_se
                     upload_resp = api.media_upload(image_filename, file=file)
                     media_ids.append(upload_resp.media_id_string)
                 api.update_status(status=status, media_ids=media_ids)
+                print('{}: Tweeted {}'.format(day, status))
+            else:
+                print('{}: Test tweeted {}'.format(day, status))
 
     else:
         print('{}: No tweets'.format(day))
