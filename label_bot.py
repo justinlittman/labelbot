@@ -10,19 +10,18 @@ from time import sleep
 import argparse
 import random
 import config
+from collections import namedtuple
 from selenium import webdriver
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
-auth = tweepy.OAuthHandler(config.consumer_key, config.consumer_secret)
-auth.set_access_token(config.access_token, config.access_token_secret)
-
-api = tweepy.API(auth)
 
 class_type_cache = dict()
 
+Credentials = namedtuple('Credentials', ['consumer_key', 'consumer_secret', 'access_token', 'access_token_secret'])
 
-def retrieve_colas(date_from, date_to, class_type_from, class_type_to, driver):
+
+def retrieve_colas(date_from, date_to, class_type_from, class_type_to, working_dir, driver):
     print(
         'Getting labels from {} to {} in class types {}-{}'.format(date_from, date_to, class_type_from, class_type_to))
     driver.get('https://www.ttbonline.gov/colasonline/publicSearchColasBasic.do')
@@ -35,11 +34,10 @@ def retrieve_colas(date_from, date_to, class_type_from, class_type_to, driver):
     driver.get('https://www.ttbonline.gov/colasonline/publicSaveSearchResultsToFile.do?'
                'path=/publicSearchColasBasicProcess')
     sleep(6)
-
     colas = []
-    csv_filepath = os.path.join(config.working_dir, 'SearchResultsFile.csv')
+    csv_filepath = os.path.join(working_dir, 'SearchResultsFile.csv')
     if os.path.exists(csv_filepath):
-        with open(os.path.join(config.working_dir, 'SearchResultsFile.csv')) as csvfile:
+        with open(os.path.join(working_dir, 'SearchResultsFile.csv')) as csvfile:
             reader = csv.DictReader(csvfile)
             for row in reader:
                 colas.append((row['TTB ID'].strip('\''), row['Fanciful Name'], row['Brand Name'],
@@ -50,6 +48,7 @@ def retrieve_colas(date_from, date_to, class_type_from, class_type_to, driver):
 
 
 def retrieve_cola_detail(ttb_id, driver):
+    print('Getting COLA {}'.format(ttb_id))
     driver.get(
         'https://www.ttbonline.gov/colasonline/viewColaDetails.do?action=publicFormDisplay&ttbid={}'.format(ttb_id))
 
@@ -71,10 +70,10 @@ def retrieve_cola_detail(ttb_id, driver):
     return company, filename, 'https://www.ttbonline.gov' + src, is_square
 
 
-def retrieve_image(filename, url, session):
+def retrieve_image(filename, url, working_dir, session):
     image_resp = session.get(url, stream=True)
     image_resp.raise_for_status()
-    with open(os.path.join(config.working_dir, filename), 'wb') as file:
+    with open(os.path.join(working_dir, filename), 'wb') as file:
         for chunk in image_resp:
             file.write(chunk)
 
@@ -95,28 +94,31 @@ def lookup_class_type(class_type_code):
     return class_type_cache[class_type_code]
 
 
-def main(day, class_type_code_ranges, test=False, limit=0, delay=config.delay_secs, omit_square=False, headless=True):
-    if os.path.exists(config.working_dir):
-        shutil.rmtree(config.working_dir)
-    os.makedirs(config.working_dir)
+def main(day, class_type_code_ranges, credentials, test=False, limit=0, delay=config.delay_secs, omit_square=False,
+         headless=True, working_dir=config.working_dir):
+    if os.path.exists(working_dir):
+        shutil.rmtree(working_dir)
+    os.makedirs(working_dir)
 
     options = webdriver.ChromeOptions()
     if headless:
         options.add_argument('headless')
-    options.add_experimental_option('prefs', {'download.default_directory': os.path.abspath(config.working_dir),
+    options.add_experimental_option('prefs', {'download.default_directory': os.path.abspath(working_dir),
                                               "download.prompt_for_download": False})
+    options.add_argument('no-sandbox')
 
     driver = webdriver.Chrome(options=options)
     driver.implicitly_wait(10)
     driver.command_executor._commands["send_command"] = ("POST", '/session/$sessionId/chromium/send_command')
     driver.execute("send_command", {'cmd': 'Page.setDownloadBehavior', 'params': {'behavior': 'allow',
                                                                                   'downloadPath': os.path.abspath(
-                                                                                      config.working_dir)}})
+                                                                                      working_dir)}})
 
     try:
         colas = []
         for class_type_code_range in class_type_code_ranges:
-            colas.extend(retrieve_colas(day, day, class_type_code_range[0], class_type_code_range[1], driver))
+            colas.extend(retrieve_colas(day, day, class_type_code_range[0], class_type_code_range[1], working_dir,
+                                        driver))
 
         tweets = []
         if colas:
@@ -137,7 +139,7 @@ def main(day, class_type_code_ranges, test=False, limit=0, delay=config.delay_se
                 company, image_filename, image_url, is_square = retrieve_cola_detail(ttb_id, driver)
                 if omit_square and is_square:
                     continue
-                retrieve_image(image_filename, image_url, session)
+                retrieve_image(image_filename, image_url, working_dir, session)
 
                 class_type_str = ''
                 if class_type:
@@ -152,19 +154,23 @@ def main(day, class_type_code_ranges, test=False, limit=0, delay=config.delay_se
                     hashtag = ' #{}'.format(config.origin_hashtags[origin])
                 status = '{} was approved for {}{}.{} More: ' \
                          'https://www.ttbonline.gov/colasonline/viewColaDetails.do?' \
-                         'action=publicFormDisplay&ttbid={}'.format(
-                    company, name, class_type_str, hashtag, ttb_id)
+                         'action=publicFormDisplay&ttbid={}'.format(company, name, class_type_str, hashtag, ttb_id)
                 tweets.append((status, image_filename))
     finally:
         driver.close()
         driver.quit()
 
     if tweets:
+        auth = tweepy.OAuthHandler(credentials.consumer_key, credentials.consumer_secret)
+        auth.set_access_token(credentials.access_token, credentials.access_token_secret)
+
+        api = tweepy.API(auth)
+
         for status, image_filename in tweets:
             if not test:
                 sleep(delay)
                 media_ids = []
-                with open(os.path.join(config.working_dir, image_filename), 'rb') as file:
+                with open(os.path.join(working_dir, image_filename), 'rb') as file:
                     upload_resp = api.media_upload(image_filename, file=file)
                     media_ids.append(upload_resp.media_id_string)
                 api.update_status(status=status, media_ids=media_ids)
@@ -187,6 +193,14 @@ if __name__ == '__main__':
     parser.add_argument('--omit-square', action='store_true', help='Omit square labels like keg tags')
     parser.add_argument('--test', action='store_true')
     parser.add_argument('--headed', help='Use a headed chrome browser', action='store_true')
+    parser.add_argument('--working-dir',
+                        help='Working directory for storing downloaded files. Default is {}.'.format(
+                            config.working_dir),
+                        default=config.working_dir)
+    parser.add_argument('--consumer-key', default=config.consumer_key)
+    parser.add_argument('--consumer-secret', default=config.consumer_secret)
+    parser.add_argument('--access-token', default=config.access_token)
+    parser.add_argument('--access-token-secret', default=config.access_token_secret)
 
     args = parser.parse_args()
 
@@ -194,5 +208,7 @@ if __name__ == '__main__':
     for class_type_range in args.class_type_range:
         class_type_ranges.append(class_type_range.split('-'))
 
-    main(args.day, class_type_ranges, test=args.test, limit=args.limit, delay=args.delay, omit_square=args.omit_square,
-         headless=not args.headed)
+    m_credentials = Credentials(args.consumer_key, args.consumer_secret, args.access_token, args.access_token_secret)
+
+    main(args.day, class_type_ranges, m_credentials, test=args.test, limit=args.limit, delay=args.delay,
+         omit_square=args.omit_square, headless=not args.headed)
