@@ -14,6 +14,7 @@ from collections import namedtuple
 from selenium import webdriver
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
+from PIL import Image, ImageStat
 
 
 class_type_cache = dict()
@@ -78,6 +79,30 @@ def retrieve_image(filename, url, working_dir, session):
             file.write(chunk)
 
 
+# From https://stackoverflow.com/questions/20068945/
+# detect-if-image-is-color-grayscale-or-black-and-white-with-python-pil
+def is_color_image(filename, working_dir, thumb_size=40, mse_cutoff=22, adjust_color_bias=True):
+    pil_img = Image.open(os.path.join(working_dir, filename))
+    bands = pil_img.getbands()
+    if bands == ('R', 'G', 'B') or bands== ('R', 'G', 'B', 'A'):
+        thumb = pil_img.resize((thumb_size, thumb_size))
+        sse, bias = 0, [0, 0, 0]
+        if adjust_color_bias:
+            bias = ImageStat.Stat(thumb).mean[:3]
+            bias = [b - sum(bias)/3 for b in bias]
+        for pixel in thumb.getdata():
+            mu = sum(pixel)/3
+            sse += sum((pixel[i] - mu - bias[i])*(pixel[i] - mu - bias[i]) for i in [0, 1, 2])
+        mse = float(sse)/(thumb_size*thumb_size)
+        if mse <= mse_cutoff:
+            return False
+        return True
+    elif len(bands)==1:
+        return False
+    # Don't know
+    return False
+
+
 def lookup_class_type(class_type_code):
     if class_type_code not in class_type_cache:
         data = {
@@ -95,7 +120,7 @@ def lookup_class_type(class_type_code):
 
 
 def main(day, class_type_code_ranges, credentials, test=False, limit=0, delay=config.delay_secs, omit_square=False,
-         headless=True, working_dir=config.working_dir):
+         headless=True, working_dir=config.working_dir, omit_grey=False):
     if os.path.exists(working_dir):
         shutil.rmtree(working_dir)
     os.makedirs(working_dir)
@@ -140,6 +165,8 @@ def main(day, class_type_code_ranges, credentials, test=False, limit=0, delay=co
                 if omit_square and is_square:
                     continue
                 retrieve_image(image_filename, image_url, working_dir, session)
+                if omit_grey and not is_color_image(image_filename, working_dir):
+                    continue
 
                 class_type_str = ''
                 if class_type:
@@ -191,6 +218,7 @@ if __name__ == '__main__':
                         default=config.delay_secs)
     parser.add_argument('--limit', type=int, default='0', help='Maximum number of posts.')
     parser.add_argument('--omit-square', action='store_true', help='Omit square labels like keg tags')
+    parser.add_argument('--omit-grey', action='store_true', help='Omit labels that are greyscale')
     parser.add_argument('--test', action='store_true')
     parser.add_argument('--headed', help='Use a headed chrome browser', action='store_true')
     parser.add_argument('--working-dir',
@@ -211,4 +239,4 @@ if __name__ == '__main__':
     m_credentials = Credentials(args.consumer_key, args.consumer_secret, args.access_token, args.access_token_secret)
 
     main(args.day, class_type_ranges, m_credentials, test=args.test, limit=args.limit, delay=args.delay,
-         omit_square=args.omit_square, headless=not args.headed)
+         omit_square=args.omit_square, omit_grey=args.omit_grey, headless=not args.headed)
